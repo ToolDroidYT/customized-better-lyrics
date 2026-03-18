@@ -945,8 +945,8 @@
 
 /* Detail Modal */
 .detail-modal {
-  max-width: 550px;
-  width: 95%;
+  max-width: 600px;
+  width: 100%;
   max-height: 85vh;
   display: flex;
   flex-direction: column;
