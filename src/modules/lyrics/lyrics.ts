@@ -1,12 +1,7 @@
-/**
- * @fileoverview Main lyrics handling module for
- * Manages lyrics fetching, caching, processing, and rendering.
- */
-
 import { FETCH_LYRICS_LOG, LOG_PREFIX, LYRICS_TAB_HIDDEN_LOG, SERVER_ERROR_LOG, TAB_HEADER_CLASS } from "@constants";
 import { t } from "@core/i18n";
 import { AppState, type PlayerDetails } from "@core/appState";
-import { type LyricsData, processLyrics } from "@modules/lyrics/injectLyrics";
+import type { LyricsData } from "@modules/lyrics/lyricsTypes";
 import { stringSimilarity } from "@modules/lyrics/lyricParseUtils";
 import { flushLoader, renderLoader } from "@modules/ui/dom";
 import { log } from "@utils";
@@ -173,17 +168,7 @@ export async function createLyrics(detail: PlayerDetails, signal: AbortSignal): 
       if (!AppState.areLyricsLoaded && lyrics && !signal.aborted) {
         if (!ytLyricsEarlyInjectAbortController.signal.aborted) {
           log(LOG_PREFIX, "Temporarily Using YT Music Lyrics while we wait for synced lyrics to load");
-          let lyricsWithMeta = {
-            ...lyrics,
-            song: providerParameters.song,
-            artist: providerParameters.artist,
-            duration: providerParameters.duration,
-            videoId: providerParameters.videoId,
-            album: providerParameters.album || "",
-            segmentMap: null,
-          };
-
-          processLyrics(lyricsWithMeta, true, signal);
+          // DOM injection removed – viewer.html handles display instead
         }
       }
       return lyrics;
@@ -212,8 +197,6 @@ export async function createLyrics(detail: PlayerDetails, signal: AbortSignal): 
       log(err);
     }
 
-    let selectedProvider: string | undefined;
-
     for (let provider of providerPriority) {
       if (signal.aborted) {
         return;
@@ -241,7 +224,6 @@ export async function createLyrics(detail: PlayerDetails, signal: AbortSignal): 
             }
           }
           lyrics = sourceLyrics;
-          selectedProvider = provider;
           break;
         }
       } catch (err) {
@@ -275,24 +257,11 @@ export async function createLyrics(detail: PlayerDetails, signal: AbortSignal): 
 
     log("Got Lyrics from " + lyrics.source);
 
-    // Preserve song and artist information in the lyrics data for the "Add Lyrics" button
-
-    let lyricsWithMeta: LyricSourceResultWithMeta = {
-      song: providerParameters.song,
-      artist: providerParameters.artist,
-      album: providerParameters.album || "",
-      duration: providerParameters.duration,
-      videoId: providerParameters.videoId,
-      segmentMap,
-      providerKey: selectedProvider,
-      ...lyrics,
-    };
-
     AppState.lastLoadedVideoId = detail.videoId;
     if (signal.aborted) {
       return;
     }
-    processLyrics(lyricsWithMeta, false, signal);
+    // DOM injection removed – viewer.html handles display instead
     shouldCleanupLoader = false;
   } finally {
     if (shouldCleanupLoader) {

@@ -463,3 +463,56 @@ function matchesPath(urlString: string, path: string) {
     return false;
   }
 }
+
+/**
+ * Fetches song metadata directly from the YouTube Music Innertube API using a
+ * background-script fetch request (no request-interception required).
+ *
+ * @param videoId - The YouTube video ID to retrieve metadata for
+ * @returns An object with `title`, `artist`, and `durationMs`, or `null` on failure
+ */
+export async function fetchSongMetadataFromApi(
+  videoId: string
+): Promise<{ title: string; artist: string; durationMs: number } | null> {
+  try {
+    const response = await fetch("https://music.youtube.com/youtubei/v1/player", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-YouTube-Client-Name": "67",
+        "X-YouTube-Client-Version": "1.20240101.01.00",
+      },
+      body: JSON.stringify({
+        videoId,
+        context: {
+          client: {
+            clientName: "WEB_REMIX",
+            clientVersion: "1.20240101.01.00",
+            hl: "en",
+          },
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      log("fetchSongMetadataFromApi: HTTP error", response.status);
+      return null;
+    }
+
+    const data = await response.json();
+    const details = data?.videoDetails;
+    if (!details) {
+      log("fetchSongMetadataFromApi: no videoDetails in response");
+      return null;
+    }
+
+    const title: string = details.title ?? "";
+    const artist: string = details.author ?? "";
+    const durationMs: number = Number(details.lengthSeconds ?? 0) * 1000;
+
+    return { title, artist, durationMs };
+  } catch (err) {
+    log("fetchSongMetadataFromApi error:", err);
+    return null;
+  }
+}

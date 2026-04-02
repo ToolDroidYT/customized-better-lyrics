@@ -1,5 +1,5 @@
 import { GENERAL_ERROR_LOG } from "@constants";
-import type { LyricsData } from "@modules/lyrics/injectLyrics";
+import type { LyricsData } from "@modules/lyrics/lyricsTypes";
 import { createLyrics } from "@modules/lyrics/lyrics";
 import { flushLoader } from "@modules/ui/dom";
 import { log } from "@utils";

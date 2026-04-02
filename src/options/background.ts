@@ -10,6 +10,8 @@
  */
 import { LOG_PREFIX_BACKGROUND } from "@constants";
 import { getLocalStorage, getSyncStorage } from "@core/storage";
+import { getLyrics, initProviders, newSourceMap, providerPriority, type LyricSourceResult, type ProviderParameters } from "@modules/lyrics/providers/shared";
+import { fetchSongMetadataFromApi } from "@modules/lyrics/requestSniffer/requestSniffer";
 import {
   getInstalledStoreThemes,
   installSymlinkedThemeFromMarketplace,
@@ -110,6 +112,47 @@ function setupThemeUpdateAlarm(): void {
   });
 }
 
+// Initialise lyric providers so they can be used by the viewer page
+initProviders();
+
+/**
+ * Iterates through the provider priority list and returns the first successful
+ * lyrics result for the given song/artist/duration/videoId.
+ */
+async function fetchLyricsForVideo(
+  song: string,
+  artist: string,
+  duration: number,
+  videoId: string,
+  album: string
+): Promise<LyricSourceResult | null> {
+  const controller = new AbortController();
+  const sourceMap = newSourceMap();
+  const params: ProviderParameters = {
+    song,
+    artist,
+    duration,
+    videoId,
+    audioTrackData: null,
+    album: album || null,
+    sourceMap,
+    alwaysFetchMetadata: false,
+    signal: controller.signal,
+  };
+
+  for (const provider of providerPriority) {
+    try {
+      const result = await getLyrics(params, provider);
+      if (result && result.lyrics && result.lyrics.length > 0) {
+        return result;
+      }
+    } catch (_err) {
+      // try next provider
+    }
+  }
+  return null;
+}
+
 chrome.runtime.onInstalled.addListener(async () => {
   setupThemeUpdateAlarm();
   await migrateSymlinkedThemes();
@@ -128,7 +171,7 @@ chrome.alarms.onAlarm.addListener(alarm => {
   }
 });
 
-chrome.runtime.onMessage.addListener(request => {
+chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   if (request.action === "applyStyles") {
     chrome.tabs.query({ url: "*://music.youtube.com/*" }, tabs => {
       tabs.forEach(tab => {
@@ -139,6 +182,24 @@ chrome.runtime.onMessage.addListener(request => {
         }
       });
     });
+    return false;
+  } else if (request.action === "fetchLyrics") {
+    const { song, artist, duration, videoId, album } = request;
+    fetchLyricsForVideo(song, artist, duration, videoId, album ?? "")
+      .then(result => sendResponse({ success: true, result }))
+      .catch(err => {
+        console.warn(LOG_PREFIX_BACKGROUND, "fetchLyrics error:", err);
+        sendResponse({ success: false, result: null });
+      });
+    return true;
+  } else if (request.action === "fetchSongMetadata") {
+    fetchSongMetadataFromApi(request.videoId)
+      .then(meta => sendResponse({ success: true, meta }))
+      .catch(err => {
+        console.warn(LOG_PREFIX_BACKGROUND, "fetchSongMetadata error:", err);
+        sendResponse({ success: false, meta: null });
+      });
+    return true;
   }
-  return true;
+  return false;
 });

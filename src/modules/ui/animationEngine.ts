@@ -11,10 +11,10 @@ import {
   USER_SCROLLING_CLASS,
 } from "@constants";
 import { AppState } from "@core/appState";
-import { calculateLyricPositions, type LineData } from "@modules/lyrics/injectLyrics";
-import { hideAdOverlay, isAdPlaying, showAdOverlay } from "@modules/ui/dom";
-import { log } from "@utils";
-import { ctx, resetDebugRender } from "./animationEngineDebug";
+import { type LineData } from "@modules/lyrics/lyricsTypes";
+import { hideAdOverlay, isAdPlaying, setExtraHeight, showAdOverlay } from "@modules/ui/dom";
+import { getRelativeBounds, log } from "@utils";
+import { ctx, resetDebugRender, resizeCanvas } from "./animationEngineDebug";
 import { registerThemeSetting } from "@modules/settings/themeOptions";
 
 const LYRIC_ENDING_THRESHOLD_S = registerThemeSetting("blyrics-lyric-ending-threshold-s", 0.5);
@@ -666,4 +666,27 @@ export function toMs(cssDuration: string): number {
  */
 export function reflow(elt: HTMLElement): void {
   void elt.offsetHeight;
+}
+
+/**
+ * Recalculates the positions and dimensions of all lyric lines so the
+ * animation engine can scroll to the correct position.  Also resizes
+ * the debug canvas.
+ */
+export function calculateLyricPositions(): void {
+  setExtraHeight();
+  if (AppState.lyricData && AppState.areLyricsTicking) {
+    const lyricsElement = document.getElementsByClassName(LYRICS_CLASS)[0] as HTMLElement;
+
+    const data = AppState.lyricData;
+    data.lyricWidth = lyricsElement.clientWidth;
+
+    data.lines.forEach(line => {
+      const bounds = getRelativeBounds(lyricsElement, line.lyricElement);
+      line.position = bounds.y;
+      line.height = bounds.height;
+    });
+    animEngineState.wasUserScrolling = true; // trigger rescrolls
+    resizeCanvas();
+  }
 }
