@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lyrics Viewer – Better Lyrics</title>
+    <style>
+      :root {
+        --bg: #0f0f0f;
+        --surface: #1a1a1a;
+        --border: #2a2a2a;
+        --text: #e8e8e8;
+        --text-dim: #888;
+        --accent: #d6fad6;
+        --active-color: #ffffff;
+        --active-scale: 1.04;
+        --radius: 10px;
+        --font: "Satoshi", system-ui, -apple-system, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--font);
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      /* ── URL input bar ─────────────────────────────────────────────────── */
+      #url-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 16px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        flex-shrink: 0;
+      }
+
+      #url-input {
+        flex: 1;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        color: var(--text);
+        font-size: 14px;
+        padding: 8px 12px;
+        outline: none;
+        transition: border-color 0.2s;
+      }
+
+      #url-input:focus {
+        border-color: var(--accent);
+      }
+
+      #load-btn {
+        background: var(--accent);
+        border: none;
+        border-radius: var(--radius);
+        color: #111;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 700;
+        padding: 8px 20px;
+        transition: opacity 0.15s;
+        white-space: nowrap;
+      }
+
+      #load-btn:hover {
+        opacity: 0.85;
+      }
+
+      #load-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+
+      /* ── Main content area ─────────────────────────────────────────────── */
+      #main {
+        display: flex;
+        flex: 1;
+        overflow: hidden;
+      }
+
+      /* ── YouTube player ────────────────────────────────────────────────── */
+      #player-panel {
+        width: 400px;
+        min-width: 280px;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        background: #000;
+        border-right: 1px solid var(--border);
+      }
+
+      #yt-player {
+        width: 100%;
+        aspect-ratio: 16 / 9;
+      }
+
+      #yt-player iframe {
+        width: 100%;
+        height: 100%;
+        border: none;
+      }
+
+      #song-info {
+        padding: 12px 14px;
+        border-top: 1px solid var(--border);
+      }
+
+      #song-title {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      #song-artist {
+        font-size: 13px;
+        color: var(--text-dim);
+        margin-top: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      #source-info {
+        font-size: 11px;
+        color: var(--text-dim);
+        margin-top: 6px;
+      }
+
+      /* ── Lyrics panel ──────────────────────────────────────────────────── */
+      #lyrics-panel {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      #lyrics-container {
+        flex: 1;
+        overflow-y: auto;
+        padding: 24px 28px;
+        scroll-behavior: smooth;
+      }
+
+      #lyrics-container::-webkit-scrollbar {
+        width: 4px;
+      }
+
+      #lyrics-container::-webkit-scrollbar-track {
+        background: transparent;
+      }
+
+      #lyrics-container::-webkit-scrollbar-thumb {
+        background: var(--border);
+        border-radius: 4px;
+      }
+
+      .lyric-line {
+        font-size: 20px;
+        font-weight: 500;
+        color: var(--text-dim);
+        line-height: 1.55;
+        padding: 4px 0;
+        margin-bottom: 2px;
+        cursor: pointer;
+        transition:
+          color 0.25s,
+          transform 0.25s,
+          opacity 0.25s;
+        opacity: 0.5;
+        transform-origin: left center;
+        border-radius: 4px;
+        scroll-margin-top: 120px;
+      }
+
+      .lyric-line:hover {
+        opacity: 0.75;
+        color: var(--text);
+      }
+
+      .lyric-line.active {
+        color: var(--active-color);
+        opacity: 1;
+        transform: scale(var(--active-scale));
+      }
+
+      .lyric-line.instrumental {
+        font-style: italic;
+        font-size: 16px;
+        color: var(--text-dim);
+        opacity: 0.35;
+      }
+
+      /* ── Status / placeholder messages ────────────────────────────────── */
+      #status {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        height: 100%;
+        color: var(--text-dim);
+        font-size: 15px;
+        text-align: center;
+        padding: 20px;
+      }
+
+      #status svg {
+        opacity: 0.3;
+      }
+
+      .spinner {
+        width: 28px;
+        height: 28px;
+        border: 3px solid var(--border);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      /* ── Error banner ──────────────────────────────────────────────────── */
+      #error-banner {
+        display: none;
+        background: #3a1a1a;
+        border: 1px solid #6a2a2a;
+        border-radius: var(--radius);
+        color: #ffaaaa;
+        font-size: 13px;
+        padding: 10px 14px;
+        margin: 10px 16px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- URL input bar -->
+    <div id="url-bar">
+      <input
+        id="url-input"
+        type="text"
+        placeholder="Paste a YouTube Music URL (e.g. https://music.youtube.com/watch?v=…)"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <button id="load-btn">Load</button>
+    </div>
+
+    <div id="error-banner"></div>
+
+    <!-- Main content (hidden until a video is loaded) -->
+    <div id="main" style="display: none">
+      <!-- Left: YouTube IFrame player -->
+      <div id="player-panel">
+        <div id="yt-player"></div>
+        <div id="song-info">
+          <div id="song-title">–</div>
+          <div id="song-artist">–</div>
+          <div id="source-info"></div>
+        </div>
+      </div>
+
+      <!-- Right: Lyrics -->
+      <div id="lyrics-panel">
+        <div id="lyrics-container">
+          <div id="status">
+            <div class="spinner"></div>
+            <span>Loading lyrics…</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- YouTube IFrame API -->
+    <script src="https://www.youtube.com/iframe_api"></script>
+
+    <script>
+      // ── State ──────────────────────────────────────────────────────────────
+      let player = null;
+      let lyrics = []; // Array of { startTimeMs, words, isInstrumental }
+      let syncInterval = null;
+      let lastActiveIndex = -1;
+      let playerReady = false;
+
+      // ── DOM refs ───────────────────────────────────────────────────────────
+      const urlInput = document.getElementById("url-input");
+      const loadBtn = document.getElementById("load-btn");
+      const mainEl = document.getElementById("main");
+      const lyricsContainer = document.getElementById("lyrics-container");
+      const statusEl = document.getElementById("status");
+      const songTitleEl = document.getElementById("song-title");
+      const songArtistEl = document.getElementById("song-artist");
+      const sourceInfoEl = document.getElementById("source-info");
+      const errorBanner = document.getElementById("error-banner");
+
+      // ── Helpers ────────────────────────────────────────────────────────────
+
+      function showError(msg) {
+        errorBanner.textContent = msg;
+        errorBanner.style.display = "block";
+      }
+
+      function hideError() {
+        errorBanner.style.display = "none";
+      }
+
+      /**
+       * Parse the videoId from a YouTube Music URL.
+       * Accepts both music.youtube.com and youtube.com watch URLs.
+       */
+      function parseVideoId(rawUrl) {
+        try {
+          const url = new URL(rawUrl.trim());
+          return url.searchParams.get("v") || null;
+        } catch (_) {
+          // maybe the user typed just the ID
+          if (/^[a-zA-Z0-9_-]{11}$/.test(rawUrl.trim())) {
+            return rawUrl.trim();
+          }
+          return null;
+        }
+      }
+
+      // ── Load video ─────────────────────────────────────────────────────────
+
+      loadBtn.addEventListener("click", loadVideo);
+      urlInput.addEventListener("keydown", e => {
+        if (e.key === "Enter") loadVideo();
+      });
+
+      function loadVideo() {
+        hideError();
+        const videoId = parseVideoId(urlInput.value);
+        if (!videoId) {
+          showError("Could not find a video ID in the URL. Please paste a valid YouTube Music link.");
+          return;
+        }
+
+        // Reset lyrics state
+        lyrics = [];
+        lastActiveIndex = -1;
+        stopSyncLoop();
+
+        // Show the main panel
+        mainEl.style.display = "flex";
+        setLyricsLoading();
+
+        loadBtn.disabled = true;
+
+        if (player && playerReady) {
+          player.loadVideoById(videoId);
+        } else {
+          // First load – create the player
+          initYTPlayer(videoId);
+        }
+      }
+
+      // ── YouTube IFrame API ─────────────────────────────────────────────────
+
+      function initYTPlayer(videoId) {
+        player = new YT.Player("yt-player", {
+          height: "100%",
+          width: "100%",
+          videoId,
+          playerVars: {
+            autoplay: 1,
+            rel: 0,
+            modestbranding: 1,
+          },
+          events: {
+            onReady: onPlayerReady,
+            onStateChange: onPlayerStateChange,
+          },
+        });
+      }
+
+      function onPlayerReady(event) {
+        playerReady = true;
+        loadBtn.disabled = false;
+
+        const videoData = event.target.getVideoData();
+        const duration = event.target.getDuration(); // seconds
+
+        const song = videoData.title || "";
+        const artist = videoData.author || "";
+
+        songTitleEl.textContent = song || "Unknown";
+        songArtistEl.textContent = artist || "Unknown";
+
+        // Fetch lyrics from the background script
+        fetchLyricsFromBackground(song, artist, duration, videoData.video_id || "");
+      }
+
+      function onPlayerStateChange(event) {
+        // YT.PlayerState.PLAYING = 1, PAUSED = 2, ENDED = 0
+        if (event.data === 1) {
+          startSyncLoop();
+        } else if (event.data === 0 || event.data === 2) {
+          stopSyncLoop();
+        }
+      }
+
+      // ── Lyrics fetch ───────────────────────────────────────────────────────
+
+      function fetchLyricsFromBackground(song, artist, duration, videoId) {
+        chrome.runtime.sendMessage(
+          {
+            action: "fetchLyrics",
+            song,
+            artist,
+            duration, // seconds
+            videoId,
+            album: "",
+          },
+          response => {
+            if (chrome.runtime.lastError) {
+              console.error("[Viewer] Message error:", chrome.runtime.lastError.message);
+              setLyricsError("Could not reach the background script. Please reload the extension.");
+              return;
+            }
+            if (response && response.success && response.result && response.result.lyrics) {
+              renderLyrics(response.result);
+            } else {
+              setLyricsEmpty();
+            }
+          }
+        );
+      }
+
+      // ── Lyrics render ──────────────────────────────────────────────────────
+
+      function setLyricsLoading() {
+        lyricsContainer.innerHTML =
+          '<div id="status"><div class="spinner"></div><span>Loading lyrics\u2026</span></div>';
+        sourceInfoEl.textContent = "";
+      }
+
+      function setLyricsEmpty() {
+        lyricsContainer.innerHTML =
+          '<div id="status"><span>No lyrics found for this song.</span></div>';
+        sourceInfoEl.textContent = "";
+      }
+
+      function setLyricsError(msg) {
+        lyricsContainer.innerHTML = '<div id="status"><span>' + msg + "</span></div>";
+      }
+
+      function renderLyrics(result) {
+        const rawLyrics = result.lyrics || [];
+        lyrics = rawLyrics.map(l => ({
+          startTimeMs: l.startTimeMs,
+          durationMs: l.durationMs || 0,
+          words: l.words || "",
+          isInstrumental: !!l.isInstrumental,
+        }));
+
+        lyricsContainer.innerHTML = "";
+
+        lyrics.forEach((line, index) => {
+          const div = document.createElement("div");
+          div.className = "lyric-line" + (line.isInstrumental ? " instrumental" : "");
+          div.dataset.index = String(index);
+          div.dataset.startMs = String(line.startTimeMs);
+          div.textContent = line.isInstrumental ? "♪" : line.words;
+
+          // Click to seek
+          div.addEventListener("click", () => {
+            if (player && playerReady) {
+              player.seekTo(line.startTimeMs / 1000, true);
+            }
+          });
+
+          lyricsContainer.appendChild(div);
+        });
+
+        // Show source attribution
+        if (result.source) {
+          sourceInfoEl.textContent = "Source: " + result.source;
+        }
+
+        // Start sync loop now that we have lyrics
+        startSyncLoop();
+      }
+
+      // ── Time synchronisation loop ──────────────────────────────────────────
+
+      function startSyncLoop() {
+        if (syncInterval) return;
+        syncInterval = setInterval(syncLyrics, 100);
+      }
+
+      function stopSyncLoop() {
+        if (syncInterval) {
+          clearInterval(syncInterval);
+          syncInterval = null;
+        }
+      }
+
+      function syncLyrics() {
+        if (!player || !playerReady || lyrics.length === 0) return;
+
+        let currentTimeMs;
+        try {
+          currentTimeMs = player.getCurrentTime() * 1000;
+        } catch (_) {
+          return;
+        }
+
+        // Find the last line whose startTimeMs is <= currentTimeMs
+        let activeIndex = -1;
+        for (let i = 0; i < lyrics.length; i++) {
+          if (lyrics[i].startTimeMs <= currentTimeMs) {
+            activeIndex = i;
+          } else {
+            break;
+          }
+        }
+
+        if (activeIndex === lastActiveIndex) return;
+        lastActiveIndex = activeIndex;
+
+        // Update classes
+        const lines = lyricsContainer.querySelectorAll(".lyric-line");
+        lines.forEach((el, i) => {
+          if (i === activeIndex) {
+            el.classList.add("active");
+          } else {
+            el.classList.remove("active");
+          }
+        });
+
+        // Scroll active line into view
+        if (activeIndex >= 0) {
+          const activeEl = lyricsContainer.querySelector(
+            '.lyric-line[data-index="' + activeIndex + '"]'
+          );
+          if (activeEl) {
+            activeEl.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
+        }
+      }
+
+      // ── YT IFrame API ready callback ───────────────────────────────────────
+      // The global onYouTubeIframeAPIReady is called by the IFrame API script
+      // when it has finished loading. We don't need to do anything here because
+      // we create the player lazily on first "Load" click.
+      window.onYouTubeIframeAPIReady = function () {
+        // Intentionally left blank – player is created on demand
+      };
+    </script>
+  </body>
+</html>

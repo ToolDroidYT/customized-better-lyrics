@@ -1,10 +1,9 @@
 import { LOG_PREFIX_CONTENT, LYRICS_DISABLED_ATTR } from "@constants";
 import { AppState, reloadLyrics } from "@core/appState";
-import { clearCache, compileRicsToStyles, getStorage } from "@core/storage";
+import { clearCache, getStorage } from "@core/storage";
 import { log, setUpLog } from "@core/utils";
-import { calculateLyricPositions } from "@modules/lyrics/injectLyrics";
 import { clearCache as clearTranslationCache } from "@modules/lyrics/translation";
-import { applyCustomStyles, getAndApplyCustomStyles } from "@modules/ui/styleInjector";
+import { calculateLyricPositions } from "@modules/ui/animationEngine";
 import { reloadAlbumArt } from "@modules/ui/dom";
 
 let hasInitializedMessageListener = false;
@@ -172,20 +171,8 @@ export function listenForPopupMessages(): void {
   chrome.runtime.onMessage.addListener((request, _, sendResponse) => {
     log(LOG_PREFIX_CONTENT, "Received message:", request.action);
     if (request.action === "applyStyles") {
-      log(LOG_PREFIX_CONTENT, "Processing applyStyles, RICS length:", request.ricsSource?.length);
-      if (request.ricsSource) {
-        log(LOG_PREFIX_CONTENT, "Compiling RICS and applying styles");
-        const compiledCSS = compileRicsToStyles(request.ricsSource);
-        applyCustomStyles(compiledCSS);
-        calculateLyricPositions();
-        log(LOG_PREFIX_CONTENT, "Styles applied successfully");
-      } else {
-        log(LOG_PREFIX_CONTENT, "Loading styles from storage");
-        getAndApplyCustomStyles().then(() => {
-          calculateLyricPositions();
-          log(LOG_PREFIX_CONTENT, "Styles loaded from storage and applied");
-        });
-      }
+      log(LOG_PREFIX_CONTENT, "Processing applyStyles – DOM injection removed, recalculating positions only");
+      calculateLyricPositions();
     } else if (request.action === "updateSettings") {
       clearTranslationCache();
       setUpLog();
